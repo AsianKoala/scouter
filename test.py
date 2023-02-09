@@ -2,6 +2,7 @@ import os
 import json
 from requests import Session
 from datetime import date, datetime
+import numpy as np
 
 class Alliance:
     def __init__(self, color, team1, team2, auto, score):
@@ -56,12 +57,12 @@ def load_matches(event_code):
         matches = []
         for match_num, loaded_match in enumerate(data['matches']):
             teams = list(map(lambda x: x['teamNumber'], loaded_match['teams']))
-            red1, red2 = teams[0], teams[1]
-            blue1, blue2 = teams[2], teams[3]
-            red_score = loaded_match['scoreRedFinal']
-            red_auto = loaded_match['scoreRedAuto']
-            blue_score = loaded_match['scoreBlueFinal']
-            blue_auto = loaded_match['scoreBlueAuto']
+            red1, red2 = int(teams[0]), int(teams[1])
+            blue1, blue2 = int(teams[2]), int(teams[3])
+            red_score = int(loaded_match['scoreRedFinal'])
+            red_auto = int(loaded_match['scoreRedAuto'])
+            blue_score = int(loaded_match['scoreBlueFinal'])
+            blue_auto = int(loaded_match['scoreBlueAuto'])
             red = Alliance('red', red1, red2, red_auto, red_score)
             blue = Alliance('blue', blue1, blue2, blue_auto, blue_score)
             final_match = Match(match_num+1, red, blue)
@@ -75,14 +76,98 @@ def load_teams(event_code):
             teams.append(int(team.strip()))
         return teams
 
+def build_matrix(teams, matches):
+    M = []
+    for m in matches:
+        r = []
+        for team in teams:
+            if m.red.team1 == team or m.red.team2 == team:
+                r.append(1)
+            else:
+                r.append(0)
+        M.append(r)
+        b = []
+        for team in teams:
+            if m.blue.team1 == team or m.blue.team2 == team:
+                b.append(1)
+            else:
+                b.append(0)
+    return M
+
+def build_data(matches):
+    scores, autos, margins = [], [], []
+    for m in matches:
+        scores.append([m.red.score])
+        scores.append([m.blue.score])
+        autos.append([m.red.auto])
+        autos.append([m.blue.auto])
+        margins.append([m.red.score - m.blue.score])
+        margins.append([m.blue.score - m.red.score])
+    return scores, autos, margins
+
+def solve(M, scores, autos, margins):
+    M = np.matrix(M)
+    scores = np.matrix(scores)
+    autos = np.matrix(autos)
+    margins = np.matrix(margins)
+    pseudoinverse = np.linalg.pinv(M)
+    opr_matrix = np.matmul(pseudoinverse, scores)
+    auto_matrix = np.matmul(pseudoinverse, autos)
+    ccwm_matrisx = np.matmul(pseudoinverse, margins)
+    return opr_matrix, auto_matrix, ccwm_matrisx
+
+def matrix_to_list(m):
+    res = []
+    for x in m: res.append(round(float(x)), 3)
+    return res
+
+def sort_teams(teams, oprs, autos, ccwm):
+    teams_list, sorted_teams = [], []
+    sorted_oprs, sorted_autos, sorted_ccwm = [], [], []
+    for team in teams: teams_list.append(team)
+    while len(sorted_teams) < len(teams_list):
+        oprs_list = matrix_to_list(oprs)
+        autos_list = matrix_to_list(autos)
+        ccwm_list = matrix_to_list(ccwm)
+
+        for i in range(len(teams_list)):
+            if teams_list[i] not in sorted_teams:
+                best_team = teams_list[i]
+                best_opr = oprs_list[i]
+                best_auto = autos_list[i]
+                best_ccwm = ccwm_list[i]
+                break
+
+        for i in range(len(teams_list)):
+            if oprs_list[i] > best_opr and teams_list[i] not in sorted_teams:
+                best_team = teams_list[i]
+                best_opr = oprs_list[i]
+                best_auto = autos_list[i]
+                best_ccwm = ccwm_list[i]
+
+        sorted_teams.append(best_team)
+        sorted_oprs.append(best_opr)
+        sorted_autos.append(best_auto)
+        sorted_ccwm.append(best_ccwm)
+
+    print("\nTEAM\t\tOPR\t\tAuto\t\tCCWM\t\tTeam Name")
+    for i in range(len(teams_list)):
+        teamNum = sorted_teams[i]
+        print("Team " + str(teamNum) + "\t" + str(sorted_oprs[i]) + "\t\t" + str(sorted_autos[i]) +\
+              "\t\t" + str(sorted_ccwm[i]) + "\t\t" + str(teams[teamNum]))
+
 
 def main():
     event = 'USCHSHAQ2'
     # scrape_event(event)
     # scrape_team_list(event)
     matches = load_matches(event)
-    for m in matches: print(m)
-    # load_teams(event)
+    teams = load_teams(event)
+    M = build_matrix(teams, matches)
+    scores, autos, margins = build_data(matches)
+    opr_matrix, auto_matrix, margin_matrix = solve(M, scores, autos, margins)
+    sort_teams(teams, opr_matrix, auto_matrix, margin_matrix)
+
 
 if __name__ == "__main__":
     main()
