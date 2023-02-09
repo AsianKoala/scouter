@@ -4,7 +4,6 @@ from requests import Session
 from datetime import date, datetime
 import numpy as np
 
-# https://github.com/owsorber/FTC_OPR_Calculator/blob/master/OPR.py
 class Alliance:
     def __init__(self, color, team1, team2, auto, score):
         self.color = color
@@ -36,7 +35,7 @@ def scrape_event(event_code):
     session = Session()
     session.headers.update({"Authorization": "Basic {}".format(api_key), "content-type": "application/json"})
     event_url = 'https://ftc-api.firstinspires.org/v2.0/2022/matches/{}'.format(event_code)
-    with open('{}-event.json'.format(event_code), 'w') as f:
+    with open('data/{}-event.json'.format(event_code), 'w') as f:
         response = session.get(event_url)
         f.write(json.dumps(response.json()))
 
@@ -46,13 +45,13 @@ def scrape_team_list(event_code):
     session.headers.update({"Authorization": "Basic {}".format(api_key), "content-type": "application/json"})
     event_url = 'https://ftc-api.firstinspires.org/v2.0/2022/teams?eventCode={}'.format(event_code)
     response = session.get(event_url)
-    teams = list(map(lambda x: x['teamNumber'], response.json()['teams']))
-    with open('{}-teams.json'.format(event_code), 'w') as f:
+    teams = list(map(lambda x: "{} {}".format(str(x['teamNumber']), x['nameShort']), response.json()['teams']))
+    with open('data/{}-teams.json'.format(event_code), 'w') as f:
         for team in teams:
             f.write(str(team) + '\n')
 
 def load_matches(event_code):
-    with open('{}-event.json'.format(event_code), 'r') as f:
+    with open('data/{}-event.json'.format(event_code), 'r') as f:
         s = f.read()
         data = json.loads(s)
         matches = []
@@ -71,10 +70,14 @@ def load_matches(event_code):
         return matches
 
 def load_teams(event_code):
-    with open('{}-teams.json'.format(event_code), 'r') as f:
-        teams = []
-        for team in f.readlines():
-            teams.append(int(team.strip()))
+    with open('data/{}-teams.json'.format(event_code), 'r') as f:
+        teams = {}
+        for l in f.readlines():
+            cleaned = l.strip()
+            i = cleaned.index(" ")
+            num = int(cleaned[:i])
+            name = str(cleaned[i+1:])
+            teams[num] = name
         return teams
 
 def build_matrix(teams, matches):
@@ -93,6 +96,7 @@ def build_matrix(teams, matches):
                 b.append(1)
             else:
                 b.append(0)
+        M.append(b)
     return M
 
 def build_data(matches):
@@ -119,8 +123,11 @@ def solve(M, scores, autos, margins):
 
 def matrix_to_list(m):
     res = []
-    for x in m: res.append(round(float(x)), 3)
+    for x in m: res.append(round(float(x), 3))
     return res
+
+def format_team(num, name, opr, auto, ccwm):
+    return f'{num : ^5}{name : ^30}{opr : ^15}{auto: ^15}{ccwm: ^15}'
 
 def sort_teams(teams, oprs, autos, ccwm):
     teams_list, sorted_teams = [], []
@@ -151,17 +158,16 @@ def sort_teams(teams, oprs, autos, ccwm):
         sorted_autos.append(best_auto)
         sorted_ccwm.append(best_ccwm)
 
-    print("\nTEAM\t\tOPR\t\tAuto\t\tCCWM\t\tTeam Name")
+    print(format_team('TEAM', 'NAME', 'OPR', 'AUTO', 'CCWM'))
     for i in range(len(teams_list)):
-        teamNum = sorted_teams[i]
-        print("Team " + str(teamNum) + "\t" + str(sorted_oprs[i]) + "\t\t" + str(sorted_autos[i]) +\
-              "\t\t" + str(sorted_ccwm[i]) + "\t\t" + str(teams[teamNum]))
+        team_num = sorted_teams[i]
+        print(format_team(team_num, teams[team_num], sorted_oprs[i], sorted_autos[i], sorted_ccwm[i]))
 
+def scrape(event):
+    scrape_event(event)
+    scrape_team_list(event)
 
-def main():
-    event = 'USCHSHAQ2'
-    # scrape_event(event)
-    # scrape_team_list(event)
+def analyze(event):
     matches = load_matches(event)
     teams = load_teams(event)
     M = build_matrix(teams, matches)
@@ -169,6 +175,10 @@ def main():
     opr_matrix, auto_matrix, margin_matrix = solve(M, scores, autos, margins)
     sort_teams(teams, opr_matrix, auto_matrix, margin_matrix)
 
+def main():
+    event = 'USCHSHAQ2'
+    # scrape_event(event)
+    analyze(event)
 
 if __name__ == "__main__":
     main()
