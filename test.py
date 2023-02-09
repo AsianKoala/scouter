@@ -4,6 +4,7 @@ from requests import Session
 from datetime import date, datetime
 import numpy as np
 
+# https://github.com/owsorber/FTC_OPR_Calculator/blob/master/OPR.py
 class Alliance:
     def __init__(self, color, team1, team2, auto, score):
         self.color = color
