@@ -177,7 +177,7 @@ def analyze(event):
 
 def main():
     event = 'USCHSHAQ2'
-    # scrape_event(event)
+    scrape(event)
     analyze(event)
 
 if __name__ == "__main__":
