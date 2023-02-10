@@ -1,28 +1,55 @@
 import os
 import json
 from requests import Session
-from datetime import date, datetime
 import numpy as np
+import sys
 
 class Alliance:
-    def __init__(self, color, team1, team2, auto, score):
+    def __init__(self, 
+            color,
+            team1,
+            team2,
+            auto,
+            tele,
+            endgame,
+            score,
+            auto_cone_pts,
+            auto_low,
+            auto_med,
+            auto_high,
+            signal_park,
+            tele_cone_pts,
+            tele_low,
+            tele_med,
+            tele_high,
+            owned_junctions,
+            beacons,
+            circuit_pts):
         self.color = color
         self.team1 = team1
         self.team2 = team2
         self.auto = auto
+        self.tele = tele
+        self.endgame = endgame
         self.score = score
-
-    def __str__(self):
-        return self.color + " Alliance: " + str(self.team1) + ", " + (self.team2)
+        self.auto_cone_pts = auto_cone_pts
+        self.auto_low = auto_low
+        self.auto_med = auto_med
+        self.auto_high = auto_high
+        self.signal_park = signal_park
+        self.tele_cone_pts = tele_cone_pts
+        self.tele_low = tele_low
+        self.tele_med = tele_med
+        self.tele_high = tele_high
+        self.owned_junctions = owned_junctions
+        self.beacons = beacons
+        self.circuit_pts = circuit_pts
 
 class Match:
     def __init__(self, num, red, blue):
         self.num = num
         self.red = red
         self.blue = blue
-
-    def __str__(self):
-        return "Match # " + str(self.num) + ": (" + str(self.red.team1) + " & " + str(self.red.team2) + ") " + str(self.red.score) + " - " + str(self.blue.score) + " (" + str(self.blue.team1) + " & " +  str(self.blue.team2) + ")"
 
 def get_api_key():
     file = os.path.join("api_key")
@@ -49,6 +76,14 @@ def scrape_team_list(event_code):
     with open('data/{}-teams.json'.format(event_code), 'w') as f:
         for team in teams:
             f.write(str(team) + '\n')
+
+def scrape_score(event_code):
+    api_key = get_api_key()
+    session = Session()
+    session.headers.update({"Authorization": "Basic {}".format(api_key), "content-type": "application/json"})
+    event_url = 'https://ftc-api.firstinspires.org/v2.0/2022/scores/{}/qual'.format(event_code)
+    response = session.get(event_url)
+    print(response.json()['MatchScores'][0]['alliances'][0])
 
 def load_matches(event_code):
     with open('data/{}-event.json'.format(event_code), 'r') as f:
@@ -118,8 +153,8 @@ def solve(M, scores, autos, margins):
     pseudoinverse = np.linalg.pinv(M)
     opr_matrix = np.matmul(pseudoinverse, scores)
     auto_matrix = np.matmul(pseudoinverse, autos)
-    ccwm_matrisx = np.matmul(pseudoinverse, margins)
-    return opr_matrix, auto_matrix, ccwm_matrisx
+    ccwm_matrix = np.matmul(pseudoinverse, margins)
+    return opr_matrix, auto_matrix, ccwm_matrix
 
 def matrix_to_list(m):
     res = []
@@ -177,8 +212,11 @@ def analyze(event):
 
 def main():
     event = 'USCHSHAQ2'
-    scrape(event)
-    analyze(event)
+    # if len(sys.argv) > 1: event = str(sys.argv[1])
+    # if os.path.exists('data/{}-event.json'.format(event)):
+        # scrape(event)
+    # analyze(event)
+    scrape_score(event)
 
 if __name__ == "__main__":
     main()
