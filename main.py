@@ -425,9 +425,8 @@ def analyze_new(event):
 
 def main():
     event = 'USCHSHAQ2'
-    # if len(sys.argv) > 1: event = str(sys.argv[1])
-    # if os.path.exists('data/{}-event.json'.format(event)):
-    #     scrape(event)
+    if len(sys.argv) > 1: event = str(sys.argv[1])
+    # if os.path.exists('data/{}-matches.json'.format(event)):
     scrape_new(event)
     analyze_new(event)
 
