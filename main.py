@@ -3,6 +3,8 @@ import json
 from requests import Session
 import numpy as np
 import sys
+import argparse
+from datetime import datetime
 
 class Alliance:
     def __init__(self, 
@@ -146,6 +148,9 @@ def load_matches_new(event_code):
         match_data = json.loads(s)
         event_data = json.loads(t)
         matches = []
+        if len(match_data['MatchScores']) == 0: 
+            print('skipping', event_code)
+            return None
         for i, m in enumerate(match_data['MatchScores']):
             teams = list(map(lambda x: x['teamNumber'], event_data['matches'][i]['teams']))
             red1, red2 = int(teams[0]), int(teams[1])
@@ -173,33 +178,18 @@ def build_matrix(teams, matches):
     for m in matches:
         r = []
         for team in teams:
-            if m.red.team1 == team or m.red.team2 == team:
-                r.append(1)
-            else:
-                r.append(0)
+            if m.red.team1 == team or m.red.team2 == team: r.append(1)
+            else: r.append(0)
         M.append(r)
         b = []
         for team in teams:
-            if m.blue.team1 == team or m.blue.team2 == team:
-                b.append(1)
-            else:
-                b.append(0)
+            if m.blue.team1 == team or m.blue.team2 == team: b.append(1)
+            else: b.append(0)
         M.append(b)
     return M
 
-def build_data(matches):
-    scores, autos, margins = [], [], []
-    for m in matches:
-        scores.append([m.red.score])
-        scores.append([m.blue.score])
-        autos.append([m.red.auto])
-        autos.append([m.blue.auto])
-        margins.append([m.red.score - m.blue.score])
-        margins.append([m.blue.score - m.red.score])
-    return scores, autos, margins
-
 def build_new_data(matches):
-    auto, tele, endgame, score, auto_cone_pts, auto_low, auto_med, auto_high, signal_park, tele_cone_pts, tele_ground, tele_low, tele_med, tele_high, beacons, owned_junctions, circuit_pts, margins = [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], []
+    auto, tele, endgame, score, auto_cone_pts, auto_low, auto_med, auto_high, signal_park, tele_cone_pts, tele_ground, tele_low, tele_med, tele_high, beacons, owned_junctions, circuit_pts = [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], []
     for m in matches:
         auto.append([m.red.auto])
         tele.append([m.red.tele])
@@ -237,23 +227,9 @@ def build_new_data(matches):
         owned_junctions.append([m.blue.owned_junctions])
         circuit_pts.append([m.blue.circuit_pts])
 
-        margins.append([m.red.score - m.blue.score])
-        margins.append([m.blue.score - m.red.score])
+    return auto, tele, endgame, score, auto_cone_pts, auto_low, auto_med, auto_high, signal_park, tele_cone_pts, tele_ground, tele_low, tele_med, tele_high, beacons, owned_junctions, circuit_pts
 
-    return auto, tele, endgame, score, auto_cone_pts, auto_low, auto_med, auto_high, signal_park, tele_cone_pts, tele_ground, tele_low, tele_med, tele_high, beacons, owned_junctions, circuit_pts, margins
-
-def solve(M, scores, autos, margins):
-    M = np.matrix(M)
-    scores = np.matrix(scores)
-    autos = np.matrix(autos)
-    margins = np.matrix(margins)
-    pseudoinverse = np.linalg.pinv(M)
-    opr_matrix = np.matmul(pseudoinverse, scores)
-    auto_matrix = np.matmul(pseudoinverse, autos)
-    ccwm_matrix = np.matmul(pseudoinverse, margins)
-    return opr_matrix, auto_matrix, ccwm_matrix
-
-def solve_new(M, auto, tele, endgame, score, auto_cone_pts, auto_low, auto_med, auto_high, signal_park, tele_cone_pts, tele_ground, tele_low, tele_med, tele_high, beacons, owned_junctions, circuit_pts, margins):
+def solve_new(M, auto, tele, endgame, score, auto_cone_pts, auto_low, auto_med, auto_high, signal_park, tele_cone_pts, tele_ground, tele_low, tele_med, tele_high, beacons, owned_junctions, circuit_pts):
     M = np.matrix(M)
     auto = np.matrix(auto)
     tele = np.matrix(tele)
@@ -272,7 +248,6 @@ def solve_new(M, auto, tele, endgame, score, auto_cone_pts, auto_low, auto_med, 
     beacons = np.matrix(beacons)
     owned_junctions = np.matrix(owned_junctions)
     circuit_pts = np.matrix(circuit_pts)
-    margins = np.matrix(margins)
     
     psuedoinverse = np.linalg.pinv(M)
 
@@ -293,21 +268,31 @@ def solve_new(M, auto, tele, endgame, score, auto_cone_pts, auto_low, auto_med, 
     beacons = np.matmul(psuedoinverse, beacons)
     owned_junctions = np.matmul(psuedoinverse, owned_junctions)
     circuit_pts = np.matmul(psuedoinverse, circuit_pts)
-    margins = np.matmul(psuedoinverse, margins)
 
-    return auto, tele, endgame, score, auto_cone_pts, auto_low, auto_med, auto_high, signal_park, tele_cone_pts, tele_ground, tele_low, tele_med, tele_high, beacons, owned_junctions, circuit_pts, margins
+    return auto, tele, endgame, score, auto_cone_pts, auto_low, auto_med, auto_high, signal_park, tele_cone_pts, tele_ground, tele_low, tele_med, tele_high, beacons, owned_junctions, circuit_pts
 
 def matrix_to_list(m):
     res = []
     for x in m: res.append(round(float(x), 2))
     return res
 
-def format_team(num, name, score, margins, auto, tele, endgame, auto_cone_pts, auto_low, auto_med, auto_high, signal_park, tele_cone_pts, tele_ground, tele_low, tele_med, tele_high, beacons, owned_junctions, circuit_pts):
-    return f'{num : ^5}{name : ^30}{score : ^15}{margins: ^15}{auto: ^15}{tele: ^15}{endgame: ^15}{auto_cone_pts: ^15}{auto_low: ^15}{auto_med: ^15}{auto_high: ^15}{signal_park: ^15}{tele_cone_pts: ^15}{tele_ground: ^15}{tele_low: ^15}{tele_med: ^15}{tele_high: ^15}{beacons: ^15}{owned_junctions: ^15}{circuit_pts: ^15}'
+def format_team(num, name, score, auto, tele, endgame, auto_cone_pts, auto_low, auto_med, auto_high, signal_park, tele_cone_pts, tele_ground, tele_low, tele_med, tele_high, beacons, owned_junctions, circuit_pts):
+    return f'{num : ^10}{name[:min(len(name), 20)] : ^25}{score : ^16}{auto: ^16}{tele: ^16}{endgame: ^16}{auto_cone_pts: ^16}{auto_low: ^16}{auto_med: ^16}{auto_high: ^16}{signal_park: ^16}{tele_cone_pts: ^16}{tele_ground: ^16}{tele_low: ^16}{tele_med: ^16}{tele_high: ^16}{beacons: ^16}{owned_junctions: ^16}{circuit_pts: ^16}'
 
-def sort_teams(teams, auto, tele, endgame, score, auto_cone_pts, auto_low, auto_med, auto_high, signal_park, tele_cone_pts, tele_ground, tele_low, tele_med, tele_high, beacons, owned_junctions, circuit_pts, margins):
+def print_header():
+    print(format_team('TEAM', 'NAME', 'OPR', 'AUTO', 'TELE', 'ENDGAME', 'A_CONE_PTS', 'A_L', 'A_M', 'A_H', 'PARK', 'T_CONE_PTS', 'T_G', 'T_L', 'T_M', 'T_H', 'BEACON', 'OWNED', 'CIRCUIT'))
+
+def print_team(num, name, auto, tele, endgame, score, auto_cone_pts, auto_low, auto_med, auto_high, signal_park, tele_cone_pts, tele_ground, tele_low, tele_med, tele_high, beacons, owned_junctions, circuit_pts):
+    print(format_team(num, name, score, auto, tele, endgame, auto_cone_pts, auto_low, auto_med, auto_high, signal_park, tele_cone_pts, tele_ground, tele_low, tele_med, tele_high, beacons, owned_junctions, circuit_pts))
+
+def print_all_teams(teams, teams_list, sorted_teams, sorted_auto, sorted_tele, sorted_endgame, sorted_score, sorted_auto_cone_pts, sorted_auto_low, sorted_auto_med, sorted_auto_high, sorted_signal_park, sorted_tele_cone_pts, sorted_tele_ground, sorted_tele_low, sorted_tele_med, sorted_tele_high, sorted_beacons, sorted_owned_junctions, sorted_circuit_pts):
+        for i in range(len(teams_list)):
+            team_num = sorted_teams[i]
+            print_team(team_num, teams[team_num],sorted_auto[i], sorted_tele[i], sorted_endgame[i], sorted_score[i], sorted_auto_cone_pts[i], sorted_auto_low[i], sorted_auto_med[i], sorted_auto_high[i], sorted_signal_park[i], sorted_tele_cone_pts[i], sorted_tele_ground[i], sorted_tele_low[i], sorted_tele_med[i], sorted_tele_high[i], sorted_beacons[i], sorted_owned_junctions[i], sorted_circuit_pts[i])
+
+def sort_teams(teams, auto, tele, endgame, score, auto_cone_pts, auto_low, auto_med, auto_high, signal_park, tele_cone_pts, tele_ground, tele_low, tele_med, tele_high, beacons, owned_junctions, circuit_pts):
     teams_list, sorted_teams = [], []
-    sorted_auto, sorted_tele, sorted_endgame, sorted_score, sorted_auto_cone_pts, sorted_auto_low, sorted_auto_med, sorted_auto_high, sorted_signal_park, sorted_tele_cone_pts, sorted_tele_ground, sorted_tele_low, sorted_tele_med, sorted_tele_high, sorted_beacons, sorted_owned_junctions, sorted_circuit_pts, sorted_margins = [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], []
+    sorted_auto, sorted_tele, sorted_endgame, sorted_score, sorted_auto_cone_pts, sorted_auto_low, sorted_auto_med, sorted_auto_high, sorted_signal_park, sorted_tele_cone_pts, sorted_tele_ground, sorted_tele_low, sorted_tele_med, sorted_tele_high, sorted_beacons, sorted_owned_junctions, sorted_circuit_pts = [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], [], []
     for team in teams: teams_list.append(team)
     while len(sorted_teams) < len(teams_list):
         auto_list = matrix_to_list(auto)
@@ -327,7 +312,6 @@ def sort_teams(teams, auto, tele, endgame, score, auto_cone_pts, auto_low, auto_
         beacons_list = matrix_to_list(beacons)
         owned_junctions_list = matrix_to_list(owned_junctions)
         circuit_pts_list = matrix_to_list(circuit_pts)
-        margins_list = matrix_to_list(margins)
 
         for i in range(len(teams_list)):
             if teams_list[i] not in sorted_teams:
@@ -349,7 +333,6 @@ def sort_teams(teams, auto, tele, endgame, score, auto_cone_pts, auto_low, auto_
                 best_beacons = beacons_list[i]
                 best_owned_junctions = owned_junctions_list[i]
                 best_circuit_pts = circuit_pts_list[i]
-                best_margins = margins_list[i]
 
         for i in range(len(teams_list)):
             if score_list[i] > best_score and teams_list[i] not in sorted_teams:
@@ -371,7 +354,6 @@ def sort_teams(teams, auto, tele, endgame, score, auto_cone_pts, auto_low, auto_
                 best_beacons = beacons_list[i]
                 best_owned_junctions = owned_junctions_list[i]
                 best_circuit_pts = circuit_pts_list[i]
-                best_margins = margins_list[i]
 
         sorted_teams.append(best_team)
         sorted_auto.append(best_auto)
@@ -391,44 +373,109 @@ def sort_teams(teams, auto, tele, endgame, score, auto_cone_pts, auto_low, auto_
         sorted_beacons.append(best_beacons)
         sorted_owned_junctions.append(best_owned_junctions)
         sorted_circuit_pts.append(best_circuit_pts)
-        sorted_margins.append(best_margins)
 
-    print(format_team('TEAM', 'NAME', 'OPR', 'CCWM', 'AUTO', 'TELE', 'ENDGAME', 'AUTO_CONE_PTS', 'A_LOW', 'A_MED', 'A_HIGH', 'PARK', 'TELE_CONE_PTS', 'T_GROUND', 'T_LOW', 'T_MED', 'T_HIGH', 'BEACON', 'OWNED', 'CIRCUIT'))
-    for i in range(len(teams_list)):
-        team_num = sorted_teams[i]
-        print(format_team(team_num, teams[team_num], sorted_score[i], sorted_margins[i], sorted_auto[i], sorted_tele[i], sorted_endgame[i], sorted_auto_cone_pts[i], sorted_auto_low[i], sorted_auto_med[i], sorted_auto_high[i], sorted_signal_park[i], sorted_tele_cone_pts[i], sorted_tele_ground[i], sorted_tele_low[i], sorted_tele_med[i], sorted_tele_high[i], sorted_beacons[i], sorted_owned_junctions[i], sorted_circuit_pts[i]))
+    return [teams, teams_list, sorted_teams, sorted_auto, sorted_tele, sorted_endgame, sorted_score, sorted_auto_cone_pts, sorted_auto_low, sorted_auto_med, sorted_auto_high, sorted_signal_park, sorted_tele_cone_pts, sorted_tele_ground, sorted_tele_low, sorted_tele_med, sorted_tele_high, sorted_beacons, sorted_owned_junctions, sorted_circuit_pts]
+
+def get_orange_api_key():
+    file = os.path.join('orange_api_key')
+    with open(file, 'r') as f:
+        api_key = f.read().strip()
+        return api_key
+
+def strip_timestamp(t):
+    return datetime.fromisoformat(t[:t.index('T')])
+
+def check_needs_scrape(event):
+    return not os.path.exists('data/{}-matches.json'.format(event))
 
 def scrape(event):
     scrape_event(event)
     scrape_team_list(event)
-
-def scrape_new(event):
-    scrape_event(event)
-    scrape_team_list(event)
     scrape_matches(event)
 
-def analyze(event):
-    matches = load_matches(event)
-    teams = load_teams(event)
-    M = build_matrix(teams, matches)
-    scores, autos, margins = build_data(matches)
-    opr_matrix, auto_matrix, margin_matrix = solve(M, scores, autos, margins)
-    sort_teams(teams, opr_matrix, auto_matrix, margin_matrix)
-
-def analyze_new(event):
+def analyze(event, should_print):
     matches = load_matches_new(event)
+    if matches == None: return None
     teams = load_teams(event)
     M = build_matrix(teams, matches)
-    auto, tele, endgame, score, auto_cone_pts, auto_low, auto_med, auto_high, signal_park, tele_cone_pts, tele_ground, tele_low, tele_med, tele_high, beacons, owned_junctions, circuit_pts, margins = build_new_data(matches)
-    auto, tele, endgame, score, auto_cone_pts, auto_low, auto_med, auto_high, signal_park, tele_cone_pts, tele_ground, tele_low, tele_med, tele_high, beacons, owned_junctions, circuit_pts, margins = solve_new(M, auto, tele, endgame, score, auto_cone_pts, auto_low, auto_med, auto_high, signal_park, tele_cone_pts, tele_ground, tele_low, tele_med, tele_high, beacons, owned_junctions, circuit_pts, margins)
-    sort_teams(teams, auto, tele, endgame, score, auto_cone_pts, auto_low, auto_med, auto_high, signal_park, tele_cone_pts, tele_ground, tele_low, tele_med, tele_high, beacons, owned_junctions, circuit_pts, margins)
+    auto, tele, endgame, score, auto_cone_pts, auto_low, auto_med, auto_high, signal_park, tele_cone_pts, tele_ground, tele_low, tele_med, tele_high, beacons, owned_junctions, circuit_pts = build_new_data(matches)
+    auto, tele, endgame, score, auto_cone_pts, auto_low, auto_med, auto_high, signal_park, tele_cone_pts, tele_ground, tele_low, tele_med, tele_high, beacons, owned_junctions, circuit_pts = solve_new(M, auto, tele, endgame, score, auto_cone_pts, auto_low, auto_med, auto_high, signal_park, tele_cone_pts, tele_ground, tele_low, tele_med, tele_high, beacons, owned_junctions, circuit_pts)
+    event_data = sort_teams(teams, auto, tele, endgame, score, auto_cone_pts, auto_low, auto_med, auto_high, signal_park, tele_cone_pts, tele_ground, tele_low, tele_med, tele_high, beacons, owned_junctions, circuit_pts)
+    if should_print: print_all_teams(*event_data)
+    return event_data
+
+def get_team_event_response(team):
+    api_key = get_api_key()
+    session = Session()
+    session.headers.update({"Authorization": "Basic {}".format(api_key), "content-type": "application/json"})
+    event_url = 'https://ftc-api.firstinspires.org/v2.0/2022/events?teamNumber={}'.format(team)
+    response = session.get(event_url).json()['events']
+    event_codes = list(map(lambda x: x['code'], response))
+    start_dates = list(map(lambda x: strip_timestamp(x['dateStart']), response))
+    return event_codes, start_dates
+    
+def analyze_all_events(team):
+    event_codes, start_dates = get_team_event_response(team)
+    today = datetime.today()
+    num_future_timestamps = sum([x > today for x in start_dates])
+    prev_events = event_codes[num_future_timestamps + 1:]
+    if len(prev_events) == 0: return []
+    return prev_events
+
+def analyze_recent_event(team):
+    event_codes, start_dates = get_team_event_response(team)
+    event_time_pairs = zip(event_codes, start_dates)
+    event_time_pairs = sorted(event_time_pairs, key=lambda x: x[1], reverse=True)
+    today = datetime.today()
+    num_future_timestamps = sum([x > today for x in start_dates])
+    print(num_future_timestamps)
+    prev_events = list(map(lambda x: x[0], event_time_pairs))[num_future_timestamps:]
+    return prev_events
+
+def get_team_highest_opr(team):
+    events = get_team_event_response(team)
+    best_opr = -100000 # surely no team will be below this opr
+    best_event = []
+    for event in events:
+        if check_needs_scrape(event):
+            print('scraping', event)
+            scrape(event)
+        event_stats = analyze(event, False)
+        if event_stats == None: continue
+        idx = event_stats[2].index(team)
+        team_stats = [team, event_stats[0][team]] + [x[idx] for x in event_stats[3:]]
+        team_opr = team_stats[5]
+        if team_opr > best_opr:
+            best_opr = team_opr
+            best_event = team_stats
+    return best_event
+
+def print_teams_best_events(best_events):
+    print_header()
+    best_events.sort(reverse=True, key=lambda x: x[5])
+    for team in best_events:
+        print_team(*team)
+
+def scout_event(event_code):
+    if not os.path.exists('{}-teams.json'.format(event_code)):
+        scrape_team_list(event_code)
+    teams = list(load_teams(event_code))
+    best_events = list(filter(lambda x: len(x) > 0, map(lambda x: get_team_highest_opr(x), teams)))
+    print_teams_best_events(best_events)
 
 def main():
-    event = 'USCHSHAQ2'
-    if len(sys.argv) > 1: event = str(sys.argv[1])
-    # if os.path.exists('data/{}-matches.json'.format(event)):
-    scrape_new(event)
-    analyze_new(event)
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument('event')
+    # parser.add_argument('-t', '--teams', action='store_true')
+    # args = parser.parse_args()
+    # print(args.event, args.teams)
+    # get_team_highest_opr(21232)
+    # if len(sys.argv) > 1: event = str(sys.argv[1])
+    # scrape(event)
+    # analyze(event)
+    # scout_event('USCHSCMPVIO')
+    # scout_event('USALCMP')
+    analyze_recent_event(21232)
 
 if __name__ == "__main__":
     main()
