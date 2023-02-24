@@ -277,10 +277,10 @@ def matrix_to_list(m):
     return res
 
 def format_team(num, name, score, auto, tele, endgame, auto_cone_pts, auto_low, auto_med, auto_high, signal_park, tele_cone_pts, tele_ground, tele_low, tele_med, tele_high, beacons, owned_junctions, circuit_pts):
-    return f'{num : ^10}{name[:min(len(name), 20)] : ^25}{score : ^16}{auto: ^16}{tele: ^16}{endgame: ^16}{auto_cone_pts: ^16}{auto_low: ^16}{auto_med: ^16}{auto_high: ^16}{signal_park: ^16}{tele_cone_pts: ^16}{tele_ground: ^16}{tele_low: ^16}{tele_med: ^16}{tele_high: ^16}{beacons: ^16}{owned_junctions: ^16}{circuit_pts: ^16}'
+    return f'{num : ^10}{name[:min(len(name), 20)] : ^30}{score : ^15}{auto: ^15}{tele: ^15}{endgame: ^15}{auto_cone_pts: ^15}{auto_low: ^15}{auto_med: ^15}{auto_high: ^15}{signal_park: ^15}{tele_cone_pts: ^15}{tele_ground: ^15}{tele_low: ^15}{tele_med: ^15}{tele_high: ^15}{beacons: ^15}{owned_junctions: ^15}{circuit_pts: ^15}'
 
 def print_header():
-    print(format_team('TEAM', 'NAME', 'OPR', 'AUTO', 'TELE', 'ENDGAME', 'A_CONE_PTS', 'A_L', 'A_M', 'A_H', 'PARK', 'T_CONE_PTS', 'T_G', 'T_L', 'T_M', 'T_H', 'BEACON', 'OWNED', 'CIRCUIT'))
+    print(format_team('TEAM', 'NAME', 'OPR', 'AUTO', 'TELE', 'END', 'A_CONE_PTS', 'A_L', 'A_M', 'A_H', 'PARK', 'T_CONE_PTS', 'T_G', 'T_L', 'T_M', 'T_H', 'BEACON', 'OWNED', 'CIRCUIT'))
 
 def print_team(num, name, auto, tele, endgame, score, auto_cone_pts, auto_low, auto_med, auto_high, signal_park, tele_cone_pts, tele_ground, tele_low, tele_med, tele_high, beacons, owned_junctions, circuit_pts):
     print(format_team(num, name, score, auto, tele, endgame, auto_cone_pts, auto_low, auto_med, auto_high, signal_park, tele_cone_pts, tele_ground, tele_low, tele_med, tele_high, beacons, owned_junctions, circuit_pts))
@@ -412,7 +412,8 @@ def get_team_event_response(team):
     response = session.get(event_url).json()['events']
     event_codes = list(map(lambda x: x['code'], response))
     start_dates = list(map(lambda x: strip_timestamp(x['dateStart']), response))
-    return event_codes, start_dates
+    # return event_codes, start_dates
+    return event_codes
     
 def analyze_all_events(team):
     event_codes, start_dates = get_team_event_response(team)
@@ -474,8 +475,8 @@ def main():
     # scrape(event)
     # analyze(event)
     # scout_event('USCHSCMPVIO')
-    # scout_event('USALCMP')
-    analyze_recent_event(21232)
+    scout_event('USALCMP')
+    # analyze_recent_event(21232)
 
 if __name__ == "__main__":
     main()
