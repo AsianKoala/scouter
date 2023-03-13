@@ -385,8 +385,15 @@ def get_orange_api_key():
 def strip_timestamp(t):
     return datetime.fromisoformat(t[:t.index('T')])
 
+def check_doesnt_exist(event, name):
+    return not os.path.exists('data/{}-{}.json'.format(event, name))
+
 def check_needs_scrape(event):
-    return not os.path.exists('data/{}-matches.json'.format(event))
+    names = ['matches', 'teams', 'event']
+    needs_scrape = False
+    for name in names:
+        needs_scrape = needs_scrape or check_doesnt_exist(event, name)
+    return needs_scrape
 
 def scrape(event):
     scrape_event(event)
@@ -412,8 +419,9 @@ def get_team_event_response(team):
     response = session.get(event_url).json()['events']
     event_codes = list(map(lambda x: x['code'], response))
     start_dates = list(map(lambda x: strip_timestamp(x['dateStart']), response))
-    # return event_codes, start_dates
-    return event_codes
+    zipped = zip(event_codes, start_dates)
+    res = list(map(lambda x: x[0], sorted(zipped, key=lambda x: x[1], reverse=True)))
+    return res
     
 def analyze_all_events(team):
     event_codes, start_dates = get_team_event_response(team)
@@ -434,8 +442,25 @@ def analyze_recent_event(team):
     return prev_events
 
 def get_team_highest_opr(team):
+    # events = get_team_event_response(team)
+    # # best_opr = -100000 # surely no team will be below this opr
+    # # best_event = []
+    # # failed_event = True
+    # for event in events:
+    #     if check_needs_scrape(event):
+    #         print('scraping', event)
+    #         scrape(event)
+    #     event_stats = analyze(event, False)
+    #     if event_stats == None: continue
+    #     idx = event_stats[2].index(team)
+    #     team_stats = [team, event_stats[0][team]] + [x[idx] for x in event_stats[3:]]
+    #     # team_opr = team_stats[5]
+    #     return team_stats
+    #    events = get_team_event_response(team)
+    #  raise Exception('All events failed')
     events = get_team_event_response(team)
-    best_opr = -100000 # surely no team will be below this opr
+    # print(events)
+    # best_opr = -100000 # surely no team will be below this opr
     best_event = []
     for event in events:
         if check_needs_scrape(event):
@@ -445,10 +470,11 @@ def get_team_highest_opr(team):
         if event_stats == None: continue
         idx = event_stats[2].index(team)
         team_stats = [team, event_stats[0][team]] + [x[idx] for x in event_stats[3:]]
-        team_opr = team_stats[5]
-        if team_opr > best_opr:
-            best_opr = team_opr
-            best_event = team_stats
+        # team_opr = team_stats[5]
+        return team_stats
+        # if team_opr > best_opr:
+        #     best_opr = team_opr
+        #     best_event = team_stats
     return best_event
 
 def print_teams_best_events(best_events):
@@ -475,7 +501,7 @@ def main():
     # scrape(event)
     # analyze(event)
     # scout_event('USCHSCMPVIO')
-    scout_event('USALCMP')
+    scout_event('USTXCECMPJHNS')
     # analyze_recent_event(21232)
 
 if __name__ == "__main__":
